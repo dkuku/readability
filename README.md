@@ -1,31 +1,37 @@
-# Readability
+# LazyReadability
 
-[![CI](https://github.com/keepcosmos/readability/actions/workflows/elixir.yml/badge.svg)](https://github.com/keepcosmos/readability/actions/workflows/elixir.yml)
-[![Module Version](https://img.shields.io/hexpm/v/readability.svg)](https://hex.pm/packages/readability)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/readability/)
-[![Total Download](https://img.shields.io/hexpm/dt/readability.svg)](https://hex.pm/packages/readability)
-[![License](https://img.shields.io/hexpm/l/readability.svg)](https://github.com/keepcosmos/readability/blob/master/LICENSE.md)
-[![Coverage Status](https://coveralls.io/repos/github/keepcosmos/readability/badge.svg?branch=master)](https://coveralls.io/github/keepcosmos/readability?branch=master)
+[![Module Version](https://img.shields.io/hexpm/v/lazy_readability.svg)](https://hex.pm/packages/lazy_readability)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/lazy_readability/)
+[![License](https://img.shields.io/hexpm/l/lazy_readability.svg)](https://github.com/dkuku/lazy_readability/blob/master/LICENSE.md)
 
-Readability is a tool for extracting and curating the primary readable content of a webpage.
+An optimized fork of [Readability](https://github.com/keepcosmos/readability) for extracting and curating the primary readable content of a webpage.
+
+## What's Different?
+
+This fork includes the following optimizations:
+
+- **Reduced HTML parsing overhead**: Eliminated redundant `to_tree()`/`from_tree()` conversions by using LazyHTML's query API directly
+- **Streamlined attribute extraction**: Uses `LazyHTML.attribute()` directly on query results instead of converting to tree first
+- **Bug fixes**: Fixed `min_text_length` regex lookup that was returning `nil`
+- **Code cleanup**: Resolved compiler warnings
 
 ## Installation
 
 The package can be installed as:
 
-Add `:readability` to your list of dependencies in `mix.exs`:
+Add `:lazy_readability` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:readability, "~> 0.12"}
+    {:lazy_readability, "~> 0.1"}
   ]
 end
 ```
 
 After that, run mix deps.get.
 
-Note: Readability requires Elixir 1.10 or higher.
+Note: LazyReadability requires Elixir 1.10 or higher.
 
 ## Usage
 
@@ -81,11 +87,12 @@ html
 |> Readability.article
 |> Readability.readable_text
 
-### you can extract the primary images with Floki
+### you can extract the primary images with LazyHTML
 html
 |> Readability.article
-|> Floki.find("img")
-|> Floki.attribute("src")
+|> LazyHTML.from_tree()
+|> LazyHTML.query("img")
+|> LazyHTML.attribute("src")
 ```
 
 ### Options
@@ -122,7 +129,7 @@ To run the test suite:
 
 ## Contributions are welcome!
 
-Check out [the main features milestone](https://github.com/keepcosmos/readability/milestones) and features of related projects below
+Check out the features of related projects below
 
 **Contributing**
 
@@ -142,7 +149,10 @@ NOTE: Be sure to merge the latest from "upstream" before making a pull request!
 
 ## Copyright and License
 
-Copyright (c) 2016 Jaehyun Shin
+Original work Copyright (c) 2016 Jaehyun Shin
+Modifications Copyright (c) 2025 Daniel Kukula
+
+This is a fork of [readability](https://github.com/keepcosmos/readability) by Jaehyun Shin.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

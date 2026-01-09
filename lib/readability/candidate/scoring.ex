@@ -45,29 +45,34 @@ defmodule Readability.Candidate.Scoring do
   defp calc_node_score([], _), do: 0
 
   def class_weight(attrs) do
-    weight = 0
-    class = attrs |> List.keyfind("class", 0, {"", ""}) |> elem(1)
-    id = attrs |> List.keyfind("id", 0, {"", ""}) |> elem(1)
+    class = get_attr(attrs, "class")
+    id = get_attr(attrs, "id")
+    positive = Readability.regexes(:positive)
+    negative = Readability.regexes(:negative)
 
-    weight = if class =~ Readability.regexes(:positive), do: weight + 25, else: weight
-    weight = if id =~ Readability.regexes(:positive), do: weight + 25, else: weight
-    weight = if class =~ Readability.regexes(:negative), do: weight - 25, else: weight
-    weight = if id =~ Readability.regexes(:negative), do: weight - 25, else: weight
-    weight
+    0
+    |> add_weight(class =~ positive, 25)
+    |> add_weight(id =~ positive, 25)
+    |> add_weight(class =~ negative, -25)
+    |> add_weight(id =~ negative, -25)
   end
 
+  defp get_attr(attrs, name) do
+    case List.keyfind(attrs, name, 0) do
+      {_, value} -> value
+      nil -> ""
+    end
+  end
+
+  defp add_weight(weight, true, delta), do: weight + delta
+  defp add_weight(weight, _, _), do: weight
+
   def calc_link_density(html_tree) do
-    text_length = Queries.text_length(html_tree)
-
-    if text_length == 0 do
-      0
-    else
-      link_length =
-        html_tree
-        |> Queries.find_tag("a")
-        |> Queries.text_length()
-
-      link_length / text_length
+    case Queries.text_length(html_tree) do
+      0 -> 0
+      text_length ->
+        link_length = html_tree |> Queries.find_tag("a") |> Queries.text_length()
+        link_length / text_length
     end
   end
 

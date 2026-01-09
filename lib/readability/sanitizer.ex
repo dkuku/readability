@@ -16,71 +16,62 @@ defmodule Readability.Sanitizer do
   @doc """
   Sanitizes article HTML tree.
   """
+  @conditional_clean_tags ~w(table ul div)
+
   @spec sanitize(html_tree, [Candidate.t()], list) :: html_tree
   def sanitize(html_tree, candidates, opts \\ []) do
-    html_tree =
+    cleaned =
       html_tree
-      |> Helper.remove_tag(&clean_headline_tag?(&1))
-      |> Helper.remove_tag(&clean_unlikely_tag?(&1))
-      |> Helper.remove_tag(&clean_empty_p?(&1))
+      |> Helper.remove_tag(&clean_headline_tag?/1)
+      |> Helper.remove_tag(&clean_unlikely_tag?/1)
+      |> Helper.remove_tag(&clean_empty_p?/1)
 
-    if opts[:clean_conditionally] do
-      html_tree |> Helper.remove_tag(conditionally_cleaing_fn(candidates))
-    else
-      html_tree
+    if opts[:clean_conditionally],
+      do: Helper.remove_tag(cleaned, conditionally_cleaning_fn(candidates)),
+      else: cleaned
+  end
+
+  defp conditionally_cleaning_fn(candidates) do
+    fn {tag, _, _} = tree ->
+      tag in @conditional_clean_tags and should_clean?(tree, candidates)
     end
   end
 
-  defp conditionally_cleaing_fn(candidates) do
-    fn {tag, attrs, _} = tree ->
-      if Enum.any?(["table", "ul", "div"], &(&1 == tag)) do
-        weight = Scoring.class_weight(attrs)
+  defp should_clean?({tag, attrs, _} = tree, candidates) do
+    weight = Scoring.class_weight(attrs)
+    candidate = Enum.find(candidates, %Candidate{}, &(&1.html_tree == tree))
 
-        same_tree =
-          candidates
-          |> Enum.find(%Candidate{}, &(&1.html_tree == tree))
-
-        list? = tag == "ul"
-
-        cond do
-          weight + same_tree.score < 0 ->
-            true
-
-          Queries.count_character(tree, ",") < 10 ->
-            # If there are not very many commas, and the number of
-            # non-paragraph elements is more than paragraphs or other
-            # ominous signs, remove the element.
-            p_len = tree |> Queries.find_tag("p") |> length
-            img_len = tree |> Queries.find_tag("img") |> length
-            li_len = tree |> Queries.find_tag("li") |> length
-            input_len = tree |> Queries.find_tag("input") |> length
-
-            embed_len =
-              tree
-              |> Queries.find_tag("embed")
-              |> Enum.reject(&(&1 =~ Readability.regexes(:video)))
-              |> length
-
-            link_density = Scoring.calc_link_density(tree)
-            conent_len = Queries.text_length(tree)
-
-            # too many image
-            # more <li>s than <p>s
-            # less than 3x <p>s than <input>s
-            # too short a content length without a single image
-            # too many links for its weight (#{weight})
-            # too many links for its weight (#{weight})
-            # <embed>s with too short a content length, or too many <embed>s
-            img_len > p_len || (!list? && li_len > p_len) || input_len > p_len / 3 ||
-              (!list? && conent_len < Readability.regexes(:min_text_length) && img_len != 1) ||
-              (weight < 25 && link_density > 0.2) || (weight >= 25 && link_density > 0.5) ||
-              ((embed_len == 1 && conent_len < 75) || embed_len > 1)
-
-          true ->
-            false
-        end
-      end
+    cond do
+      weight + candidate.score < 0 -> true
+      Queries.count_character(tree, ",") < 10 -> has_ominous_signs?(tree, tag, weight)
+      true -> false
     end
+  end
+
+  defp has_ominous_signs?(tree, tag, weight) do
+    p_len = tree |> Queries.find_tag("p") |> length()
+    img_len = tree |> Queries.find_tag("img") |> length()
+    li_len = tree |> Queries.find_tag("li") |> length()
+    input_len = tree |> Queries.find_tag("input") |> length()
+
+    embed_len =
+      tree
+      |> Queries.find_tag("embed")
+      |> Enum.reject(&(&1 =~ Readability.regexes(:video)))
+      |> length()
+
+    link_density = Scoring.calc_link_density(tree)
+    content_len = Queries.text_length(tree)
+    list? = tag == "ul"
+
+    img_len > p_len ||
+      (!list? && li_len > p_len) ||
+      input_len > p_len / 3 ||
+      (!list? && content_len < 25 && img_len != 1) ||
+      (weight < 25 && link_density > 0.2) ||
+      (weight >= 25 && link_density > 0.5) ||
+      (embed_len == 1 && content_len < 75) ||
+      embed_len > 1
   end
 
   defp clean_headline_tag?({tag, attrs, _} = html_tree) do

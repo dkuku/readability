@@ -18,7 +18,7 @@ defmodule Readability.TitleFinderTest do
   </html>
   """
 
-  @html_tree Floki.parse_fragment!(@html)
+  @html_tree @html |> LazyHTML.from_fragment() |> LazyHTML.to_tree()
 
   test "extract most proper title" do
     title = Readability.TitleFinder.title(@html_tree)
@@ -38,7 +38,9 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    assert Readability.title(html) == "Tag title"
+    # Mozilla Readability.js keeps original title when both parts are very short
+    # "Tag title" (2 words) and "test" (1 word) are both short, so keep original
+    assert Readability.title(html) == "Tag title - test"
   end
 
   test "extract og title" do
@@ -56,7 +58,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.og_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.og_title()
     assert title == "og title 1"
   end
 
@@ -72,7 +74,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "Tag title"
 
     html = """
@@ -83,7 +85,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "Tag title"
 
     html = """
@@ -94,7 +96,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "Tag title-tag"
 
     html = """
@@ -105,7 +107,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "Tag title-tag-title"
 
     html = """
@@ -119,7 +121,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "Tag title"
   end
 
@@ -133,7 +135,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.tag_title()
+    title = html |> LazyHTML.from_document() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
     assert title == "tag title 1"
   end
 
@@ -157,7 +159,7 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> Floki.parse_fragment!() |> Readability.TitleFinder.h_tag_title()
+    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.h_tag_title()
     assert title == "header 1"
   end
 

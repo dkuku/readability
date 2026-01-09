@@ -36,24 +36,23 @@ defmodule Readability.Helper do
   end
 
   def remove_attrs({tag_name, attrs, inner_tree}, target_attr) do
-    reject_fun =
-      cond do
-        is_binary(target_attr) ->
-          fn attr -> elem(attr, 0) == target_attr end
-
-        # compatibility with older versions of Elixir where is no is_struct/2
-        is_struct(target_attr) and :erlang.map_get(:__struct__, target_attr) == Regex ->
-          fn attr -> elem(attr, 0) =~ target_attr end
-
-        is_list(target_attr) ->
-          fn attr -> Enum.member?(target_attr, elem(attr, 0)) end
-
-        true ->
-          fn attr -> attr end
-      end
-
+    reject_fun = build_attr_reject_fn(target_attr)
     {tag_name, Enum.reject(attrs, reject_fun), remove_attrs(inner_tree, target_attr)}
   end
+
+  defp build_attr_reject_fn(target) when is_binary(target) do
+    fn {name, _} -> name == target end
+  end
+
+  defp build_attr_reject_fn(%Regex{} = target) do
+    fn {name, _} -> name =~ target end
+  end
+
+  defp build_attr_reject_fn(target) when is_list(target) do
+    fn {name, _} -> name in target end
+  end
+
+  defp build_attr_reject_fn(_), do: fn _ -> false end
 
   @doc """
   Removes tags.
@@ -92,10 +91,26 @@ defmodule Readability.Helper do
     |> String.replace(Readability.regexes(:replace_fonts), "<\\1span>")
     |> String.replace(Readability.regexes(:normalize), " ")
     |> transform_img_paths(opts[:url])
-    |> Floki.parse_document!()
-    |> Floki.filter_out(:comment)
+    |> LazyHTML.from_document()
+    |> LazyHTML.to_tree()
+    |> filter_out_comments()
     |> remove_tag(fn {tag, _, _} -> is_atom(tag) end)
   end
+
+  defp filter_out_comments(nodes) when is_list(nodes) do
+    nodes
+    |> Enum.reject(&is_comment?/1)
+    |> Enum.map(&filter_out_comments/1)
+  end
+
+  defp filter_out_comments({tag, attrs, children}) do
+    {tag, attrs, filter_out_comments(children)}
+  end
+
+  defp filter_out_comments(other), do: other
+
+  defp is_comment?({:comment, _}), do: true
+  defp is_comment?(_), do: false
 
   # Turn relative `img` tag paths into absolute if possible
   defp transform_img_paths(html_str, nil), do: html_str

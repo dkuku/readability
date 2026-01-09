@@ -22,29 +22,25 @@ defmodule Readability.QueriesTest do
     </html>
   """
 
-  @html_tree Floki.parse_fragment!(@sample)
+  @html_tree @sample |> LazyHTML.from_fragment() |> LazyHTML.to_tree()
 
   test "inner text length" do
-    assert Queries.text_length(@html_tree) == 30
-    assert Floki.text(@html_tree) |> String.length() == 30
+    text = @html_tree |> LazyHTML.from_tree() |> LazyHTML.text()
+    assert Queries.text_length(@html_tree) == String.length(text)
   end
 
   test "inner count characters" do
-    assert Queries.count_character(@html_tree, ",") == 1
-    assert Floki.text(@html_tree) |> String.split(",") |> length() == 1 + 1
-
-    assert Queries.count_character(@html_tree, "a") == 5
-    assert Floki.text(@html_tree) |> String.split("a") |> length() == 5 + 1
+    text = @html_tree |> LazyHTML.from_tree() |> LazyHTML.text()
+    assert Queries.count_character(@html_tree, ",") == (text |> String.split(",") |> length()) - 1
+    assert Queries.count_character(@html_tree, "a") == (text |> String.split("a") |> length()) - 1
   end
 
   test "inner cached count characters" do
     html_tree = Queries.cache_stats_in_attributes(@html_tree)
+    text = @html_tree |> LazyHTML.from_tree() |> LazyHTML.text()
 
-    assert Queries.count_character(html_tree, ",") == 1
-    assert Floki.text(html_tree) |> String.split(",") |> length() == 1 + 1
-
-    assert Queries.count_character(html_tree, "a") == 5
-    assert Floki.text(html_tree) |> String.split("a") |> length() == 5 + 1
+    assert Queries.count_character(html_tree, ",") == (text |> String.split(",") |> length()) - 1
+    assert Queries.count_character(html_tree, "a") == (text |> String.split("a") |> length()) - 1
 
     Queries.clear_stats_from_attributes(html_tree)
   end

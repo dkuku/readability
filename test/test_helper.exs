@@ -9,7 +9,8 @@ defmodule TestHelper do
   def read_parse_fixture(file_name) do
     file_name
     |> read_fixture()
-    |> Floki.parse_document!()
+    |> LazyHTML.from_document()
+    |> LazyHTML.to_tree()
   end
 end
 

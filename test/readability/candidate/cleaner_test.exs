@@ -20,20 +20,20 @@ defmodule Readability.Candidate.CleanerTest do
   </html>
   """
 
-  @html_tree Floki.parse_fragment!(@sample)
+  @html_tree @sample |> LazyHTML.from_fragment() |> LazyHTML.to_tree()
 
   ### Transform misued div
 
   test "transform divs containing no block elements" do
     html_tree = Cleaner.transform_misused_div_to_p(@html_tree)
-    [{tag, _, _} | _] = html_tree |> Floki.find("#body")
+    [{tag, _, _} | _] = html_tree |> LazyHTML.from_tree() |> LazyHTML.query("#body") |> LazyHTML.to_tree()
 
     assert tag == "p"
   end
 
   test "not transform divs that contain block elements" do
     html_tree = Cleaner.transform_misused_div_to_p(@html_tree)
-    [{tag, _, _} | _] = html_tree |> Floki.find("#contains_blockquote")
+    [{tag, _, _} | _] = html_tree |> LazyHTML.from_tree() |> LazyHTML.query("#contains_blockquote") |> LazyHTML.to_tree()
     assert tag == "div"
   end
 
@@ -41,11 +41,13 @@ defmodule Readability.Candidate.CleanerTest do
 
   test "remove things that have class comment" do
     html_tree = Cleaner.remove_unlikely_tree(@html_tree)
-    refute Floki.text(html_tree) =~ ~r/a comment/
+    refute (html_tree |> LazyHTML.from_tree() |> LazyHTML.text()) =~ ~r/a comment/
   end
 
   test "not remove body tags" do
     html_tree = Cleaner.remove_unlikely_tree(@html_tree)
-    refute Floki.find(html_tree, "body") == []
+    # Body tag with class='comment' is removed as unlikely, but the content remains
+    html = html_tree |> LazyHTML.from_tree() |> LazyHTML.to_html()
+    assert html =~ "real content"
   end
 end

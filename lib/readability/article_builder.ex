@@ -20,41 +20,39 @@ defmodule Readability.ArticleBuilder do
   Clean out any inline styles, iframes, forms, strip extraneous <p> tags, etc.
   """
   @spec build(html_tree, options) :: html_tree
+  @removable_tags ~w(script style)
+
   def build(html_tree, opts) do
     origin_tree = html_tree
 
-    html_tree =
+    prepared =
       html_tree
-      |> Helper.remove_tag(fn {tag, _, _} ->
-        Enum.member?(["script", "style"], tag)
-      end)
-
-    html_tree =
-      if opts[:remove_unlikely_candidates],
-        do: Cleaner.remove_unlikely_tree(html_tree),
-        else: html_tree
-
-    html_tree = Cleaner.transform_misused_div_to_p(html_tree)
+      |> Helper.remove_tag(fn {tag, _, _} -> tag in @removable_tags end)
+      |> maybe_remove_unlikely(opts[:remove_unlikely_candidates])
+      |> Cleaner.transform_misused_div_to_p()
 
     candidates =
-      html_tree
+      prepared
       |> Queries.cache_stats_in_attributes()
       |> CandidateFinder.find(opts)
 
-    article = find_article(candidates, html_tree)
+    result =
+      candidates
+      |> find_article(prepared)
+      |> Sanitizer.sanitize(candidates, opts)
 
-    html_tree = Sanitizer.sanitize(article, candidates, opts)
-
-    if Queries.text_length(html_tree) < opts[:retry_length] do
-      if opts = next_try_opts(opts) do
-        build(origin_tree, opts)
-      else
-        Queries.clear_stats_from_attributes(html_tree)
+    if Queries.text_length(result) < opts[:retry_length] do
+      case next_try_opts(opts) do
+        nil -> Queries.clear_stats_from_attributes(result)
+        new_opts -> build(origin_tree, new_opts)
       end
     else
-      Queries.clear_stats_from_attributes(html_tree)
+      Queries.clear_stats_from_attributes(result)
     end
   end
+
+  defp maybe_remove_unlikely(html_tree, true), do: Cleaner.remove_unlikely_tree(html_tree)
+  defp maybe_remove_unlikely(html_tree, _), do: html_tree
 
   defp next_try_opts(opts) do
     cond do
@@ -73,22 +71,16 @@ defmodule Readability.ArticleBuilder do
   end
 
   defp find_article(candidates, html_tree) do
-    best_candidate = CandidateFinder.find_best_candidate(candidates)
-
-    article_trees =
-      if best_candidate do
-        find_article_trees(best_candidate, candidates)
-      else
-        fallback_candidate =
-          case html_tree |> Queries.find_tag("body") do
-            [tree | _] -> %Candidate{html_tree: tree}
-            _ -> %Candidate{html_tree: {}}
-          end
-
-        find_article_trees(fallback_candidate, candidates)
-      end
-
+    candidate = CandidateFinder.find_best_candidate(candidates) || fallback_candidate(html_tree)
+    article_trees = find_article_trees(candidate, candidates)
     {"div", [], article_trees}
+  end
+
+  defp fallback_candidate(html_tree) do
+    case Queries.find_tag(html_tree, "body") do
+      [tree | _] -> %Candidate{html_tree: tree}
+      _ -> %Candidate{html_tree: {}}
+    end
   end
 
   defp find_article_trees(best_candidate, candidates) do
@@ -107,10 +99,19 @@ defmodule Readability.ArticleBuilder do
     inner_length = Queries.text_length(html_tree)
 
     (inner_length > 80 && link_density < 0.25) ||
-      (inner_length < 80 && link_density == 0 && Floki.text(html_tree) =~ ~r/\.( |$)/)
+      (inner_length < 80 && link_density == 0 && tree_text(html_tree) =~ ~r/\.( |$)/)
   end
 
   defp append?(_), do: false
+
+  defp tree_text({_tag, _attrs, children}) do
+    children
+    |> Enum.map(&tree_text/1)
+    |> Enum.join("")
+  end
+
+  defp tree_text(text) when is_binary(text), do: text
+  defp tree_text(_), do: ""
 
   defp to_article_tag({tag, attrs, inner_tree} = html_tree) do
     if tag =~ ~r/^p$|^div$/ do

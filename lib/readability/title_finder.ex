@@ -34,9 +34,12 @@ defmodule Readability.TitleFinder do
   """
   @spec tag_title(html_tree) :: binary
   def tag_title(html_tree) do
-    html_tree
-    |> find_tag("head title")
-    |> clean_title()
+    # Try "head title" first, fall back to just "title" for fragments
+    lazy = find_tag(html_tree, "head title")
+    lazy = if has_matches?(lazy), do: lazy, else: find_tag(html_tree, "title")
+
+    lazy
+    |> first_text()
     |> String.split(@title_suffix)
     |> hd()
   end
@@ -47,9 +50,14 @@ defmodule Readability.TitleFinder do
   @spec og_title(html_tree) :: binary
   def og_title(html_tree) do
     html_tree
-    |> find_tag("meta[property='og:title']")
-    |> Floki.attribute("content")
-    |> clean_title()
+    |> LazyHTML.from_tree()
+    |> LazyHTML.query("meta[property='og:title']")
+    |> LazyHTML.attribute("content")
+    |> List.first()
+    |> case do
+      nil -> ""
+      content -> String.trim(content)
+    end
   end
 
   @doc """
@@ -59,31 +67,24 @@ defmodule Readability.TitleFinder do
   def h_tag_title(html_tree, selector \\ @h_tag_selector) do
     html_tree
     |> find_tag(selector)
-    |> clean_title()
+    |> first_text()
   end
 
   defp find_tag(html_tree, selector) do
-    case Floki.find(html_tree, selector) do
-      [] ->
-        []
-
-      matches when is_list(matches) ->
-        hd(matches)
-    end
-  end
-
-  defp clean_title([]) do
-    ""
-  end
-
-  defp clean_title([title]) when is_binary(title) do
-    String.trim(title)
-  end
-
-  defp clean_title(html_tree) do
     html_tree
-    |> Floki.text()
-    |> String.trim()
+    |> LazyHTML.from_tree()
+    |> LazyHTML.query(selector)
+  end
+
+  defp has_matches?(%LazyHTML{} = lazy_html) do
+    lazy_html |> LazyHTML.to_tree() |> Enum.any?()
+  end
+
+  defp first_text(%LazyHTML{} = lazy_html) do
+    case LazyHTML.to_tree(lazy_html) do
+      [] -> ""
+      [first | _] -> [first] |> LazyHTML.from_tree() |> LazyHTML.text() |> String.trim()
+    end
   end
 
   defp good_title?(title) do

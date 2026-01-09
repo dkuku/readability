@@ -5,44 +5,31 @@ defmodule Readability.PublishedAtFinder do
 
   @type html_tree :: tuple | list
 
-  @strategies [:meta_tag, :time_element, :data_attribute]
-
   @doc """
   Extract the published at.
   """
   @spec find(html_tree) :: %DateTime{} | %Date{} | nil
-  def find(html_tree) do
-    value =
-      Enum.find_value(@strategies, fn strategy ->
-        strategy(strategy, html_tree)
-      end)
+  @selectors [
+    {"meta[property='article:published_time'], meta[property='article:published']", "content"},
+    {"time", "datetime"},
+    {"[data-datetime]", "data-datetime"}
+  ]
 
-    if value do
-      parse(value)
+  def find(html_tree) do
+    lazy = LazyHTML.from_tree(html_tree)
+
+    @selectors
+    |> Enum.find_value(fn {selector, attr} -> query_first_attr(lazy, selector, attr) end)
+    |> case do
+      nil -> nil
+      value -> parse(value)
     end
   end
 
-  defp strategy(:meta_tag, html_tree) do
-    selector = "meta[property='article:published_time'], meta[property='article:published']"
-
-    html_tree
-    |> Floki.attribute(selector, "content")
-    |> Enum.map(&String.trim/1)
-    |> List.first()
-  end
-
-  defp strategy(:time_element, html_tree) do
-    html_tree
-    |> Floki.find("time")
-    |> Enum.flat_map(&Floki.attribute(&1, "datetime"))
-    |> Enum.map(&String.trim/1)
-    |> List.first()
-  end
-
-  defp strategy(:data_attribute, html_tree) do
-    html_tree
-    |> Floki.find("[data-datetime]")
-    |> Enum.flat_map(&Floki.attribute(&1, "data-datetime"))
+  defp query_first_attr(lazy, selector, attr) do
+    lazy
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(attr)
     |> Enum.map(&String.trim/1)
     |> List.first()
   end

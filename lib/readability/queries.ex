@@ -7,7 +7,7 @@ defmodule Readability.Queries do
   @type options :: list
 
   def cache_stats_in_attributes(html_tree) do
-    Floki.traverse_and_update(html_tree, fn
+    traverse_and_update(html_tree, fn
       {tag, attrs, nodes} ->
         attrs =
           Keyword.put_new_lazy(attrs, :text_length, fn -> text_length({tag, attrs, nodes}) end)
@@ -23,7 +23,7 @@ defmodule Readability.Queries do
   end
 
   def clear_stats_from_attributes(html_tree) do
-    Floki.traverse_and_update(html_tree, fn
+    traverse_and_update(html_tree, fn
       {tag, attrs, nodes} ->
         {tag, Keyword.drop(attrs, [:text_length, :commas]), nodes}
 
@@ -84,4 +84,20 @@ defmodule Readability.Queries do
 
   def find_tag_internal({_, _, children}, tag), do: find_tag_internal(children, tag)
   def find_tag_internal(_, _), do: []
+
+  defp traverse_and_update(nodes, fun) when is_list(nodes) do
+    Enum.map(nodes, &traverse_and_update(&1, fun))
+  end
+
+  defp traverse_and_update({_tag, _attrs, _children} = node, fun) do
+    case fun.(node) do
+      {new_tag, new_attrs, new_children} ->
+        {new_tag, new_attrs, traverse_and_update(new_children, fun)}
+
+      other ->
+        other
+    end
+  end
+
+  defp traverse_and_update(other, fun), do: fun.(other)
 end

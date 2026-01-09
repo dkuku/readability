@@ -34,7 +34,7 @@ defmodule Readability.Candidate.Cleaner do
   end
 
   defp misused_divs?("div", inner_tree) do
-    !(Floki.raw_html(inner_tree) =~ Readability.regexes(:div_to_p_elements))
+    !(inner_tree |> LazyHTML.from_tree() |> LazyHTML.to_html() =~ Readability.regexes(:div_to_p_elements))
   end
 
   defp misused_divs?(_, _), do: false
