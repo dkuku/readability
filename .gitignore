@@ -27,3 +27,4 @@ readability-*.tar
 
 # Misc.
 .credo.exs
+.expert

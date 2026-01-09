@@ -66,25 +66,23 @@ defmodule Readability do
   """
   @spec summarize(url, options) :: Summary.t()
   def summarize(url, opts \\ []) do
-    opts = Keyword.merge(opts, page_url: url)
+    opts = Keyword.put(opts, :page_url, url)
     httpoison_options = Application.get_env(:readability, :httpoison_options, [])
     %{status_code: _, body: raw, headers: headers} = HTTPoison.get!(url, [], httpoison_options)
 
-    case is_response_markup(headers) do
-      true ->
-        html_tree = Helper.normalize(raw, url: url)
-        article_tree = ArticleBuilder.build(html_tree, opts)
+    if is_response_markup(headers) do
+      html_tree = Helper.normalize(raw, url: url)
+      article_tree = ArticleBuilder.build(html_tree, opts)
 
-        %Summary{
-          title: title(html_tree),
-          authors: authors(html_tree),
-          published_at: published_at(html_tree),
-          article_html: readable_html(article_tree),
-          article_text: readable_text(article_tree)
-        }
-
-      _ ->
-        %Summary{title: nil, authors: nil, article_html: nil, article_text: raw}
+      %Summary{
+        title: title(html_tree),
+        authors: authors(html_tree),
+        published_at: published_at(html_tree),
+        article_html: readable_html(article_tree),
+        article_text: readable_text(article_tree)
+      }
+    else
+      %Summary{title: nil, authors: nil, article_html: nil, article_text: raw}
     end
   end
 
@@ -137,7 +135,7 @@ defmodule Readability do
     raw_html
     |> LazyHTML.from_document()
     |> LazyHTML.to_tree()
-    |> title
+    |> title()
   end
 
   def title(html_tree) do
@@ -180,7 +178,7 @@ defmodule Readability do
 
   """
   @spec authors(binary | html_tree) :: list[binary]
-  def authors(html) when is_binary(html), do: html |> LazyHTML.from_document() |> LazyHTML.to_tree() |> authors
+  def authors(html) when is_binary(html), do: html |> LazyHTML.from_document() |> LazyHTML.to_tree() |> authors()
   def authors(html_tree), do: AuthorFinder.find(html_tree)
 
   @doc """
@@ -323,7 +321,7 @@ defmodule Readability do
   def readable_html(html_tree) do
     html_tree
     |> Helper.remove_attrs(regexes(:protect_attrs))
-    |> raw_html
+    |> raw_html()
   end
 
   @doc """
@@ -333,7 +331,7 @@ defmodule Readability do
   def readable_text(html_tree) do
     # @TODO: Remove image caption when extract only text
     tags_to_br = ~r/<\/(p|div|article|h\d)/i
-    html_str = html_tree |> raw_html
+    html_str = raw_html(html_tree)
 
     tags_to_br
     |> Regex.replace(html_str, &"\n#{&1}")
@@ -365,8 +363,7 @@ defmodule Readability do
 
   def regexes(:ok_maybe_its_a_candidate), do: ~r/and|article|body|column|main|shadow/i
 
-  def regexes(:positive),
-    do: ~r/article|body|content|entry|hentry|main|page|pagination|post|text|blog|story/i
+  def regexes(:positive), do: ~r/article|body|content|entry|hentry|main|page|pagination|post|text|blog|story/i
 
   def regexes(:negative),
     do:
@@ -382,8 +379,7 @@ defmodule Readability do
 
   def regexes(:normalize), do: ~r/\s{2,}/
 
-  def regexes(:video),
-    do: ~r/\/\/(www\.)?(dailymotion|youtube|youtube-nocookie|player\.vimeo)\.com/i
+  def regexes(:video), do: ~r/\/\/(www\.)?(dailymotion|youtube|youtube-nocookie|player\.vimeo)\.com/i
 
   def regexes(:protect_attrs), do: ~r/^(?!id|rel|for|summary|title|href|src|alt|srcdoc)/i
 

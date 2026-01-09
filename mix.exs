@@ -42,6 +42,7 @@ defmodule LazyReadability.Mixfile do
       {:lazy_html, "~> 0.1"},
       {:httpoison, "~> 2.0"},
       {:ex_doc, "~> 0.39", only: :dev},
+      {:styler, "~> 1.10", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test]},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3", only: :test},
@@ -52,7 +53,8 @@ defmodule LazyReadability.Mixfile do
 
   defp package do
     [
-      description: "An optimized fork of Readability - a library for extracting and curating articles. Uses LazyHTML for efficient HTML parsing.",
+      description:
+        "An optimized fork of Readability - a library for extracting and curating articles. Uses LazyHTML for efficient HTML parsing.",
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Daniel Kukula"],
       licenses: ["Apache-2.0"],

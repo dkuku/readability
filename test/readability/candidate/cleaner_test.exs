@@ -1,9 +1,9 @@
 defmodule Readability.Candidate.CleanerTest do
   use ExUnit.Case, async: true
 
-  doctest Readability.Candidate.Cleaner
-
   alias Readability.Candidate.Cleaner
+
+  doctest Cleaner
 
   @sample """
   <html>
@@ -41,7 +41,7 @@ defmodule Readability.Candidate.CleanerTest do
 
   test "remove things that have class comment" do
     html_tree = Cleaner.remove_unlikely_tree(@html_tree)
-    refute (html_tree |> LazyHTML.from_tree() |> LazyHTML.text()) =~ ~r/a comment/
+    refute html_tree |> LazyHTML.from_tree() |> LazyHTML.text() =~ ~r/a comment/
   end
 
   test "not remove body tags" do

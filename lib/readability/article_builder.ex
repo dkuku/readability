@@ -105,9 +105,7 @@ defmodule Readability.ArticleBuilder do
   defp append?(_), do: false
 
   defp tree_text({_tag, _attrs, children}) do
-    children
-    |> Enum.map(&tree_text/1)
-    |> Enum.join("")
+    Enum.map_join(children, "", &tree_text/1)
   end
 
   defp tree_text(text) when is_binary(text), do: text

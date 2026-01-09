@@ -80,7 +80,7 @@ defmodule Readability.Sanitizer do
   end
 
   defp clean_unlikely_tag?({tag, attrs, _}) do
-    attrs_str = attrs |> Enum.map(&elem(&1, 1)) |> Enum.join("")
+    attrs_str = Enum.map_join(attrs, "", &elem(&1, 1))
     tag =~ ~r/form|object|iframe|embed/ && !(attrs_str =~ Readability.regexes(:video))
   end
 

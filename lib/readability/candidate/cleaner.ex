@@ -43,8 +43,7 @@ defmodule Readability.Candidate.Cleaner do
     idclass_str =
       attrs
       |> Enum.filter(&(elem(&1, 0) =~ ~r/id|class/i))
-      |> Enum.map(&elem(&1, 1))
-      |> Enum.join("")
+      |> Enum.map_join("", &elem(&1, 1))
 
     str = tag <> idclass_str
 

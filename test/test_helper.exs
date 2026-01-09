@@ -1,4 +1,5 @@
 defmodule TestHelper do
+  @moduledoc false
   @fixtures_path "./test/fixtures/"
 
   def read_fixture(file_name) do

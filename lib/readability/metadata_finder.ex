@@ -36,7 +36,9 @@ defmodule Readability.MetadataFinder do
       case script do
         {_, _, [content]} when is_binary(content) ->
           parse_json_ld(content)
-        _ -> nil
+
+        _ ->
+          nil
       end
     end) || %{}
   end
@@ -58,12 +60,15 @@ defmodule Readability.MetadataFinder do
       type && Regex.match?(@json_ld_article_types, type)
     end)
   end
+
   defp find_article_in_json_ld(%{"@graph" => graph}) when is_list(graph) do
     find_article_in_json_ld(graph)
   end
+
   defp find_article_in_json_ld(%{"@type" => type} = parsed) do
-    if Regex.match?(@json_ld_article_types, type || ""), do: parsed, else: nil
+    if Regex.match?(@json_ld_article_types, type || ""), do: parsed
   end
+
   defp find_article_in_json_ld(_), do: nil
 
   defp extract_metadata_from_json_ld(parsed) do
@@ -71,7 +76,7 @@ defmodule Readability.MetadataFinder do
       {:title, extract_json_ld_title(parsed)},
       {:byline, extract_json_ld_byline(parsed)},
       {:excerpt, get_trimmed_string(parsed, "description")},
-      {:site_name, get_in(parsed, ["publisher", "name"]) |> trim_if_binary()},
+      {:site_name, parsed |> get_in(["publisher", "name"]) |> trim_if_binary()},
       {:published_time, get_trimmed_string(parsed, "datePublished")}
     ]
     |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
@@ -79,7 +84,7 @@ defmodule Readability.MetadataFinder do
   end
 
   defp extract_json_ld_title(parsed) do
-    publisher_name = get_in(parsed, ["publisher", "name"]) |> trim_if_binary()
+    publisher_name = parsed |> get_in(["publisher", "name"]) |> trim_if_binary()
     name = get_trimmed_string(parsed, "name")
     headline = get_trimmed_string(parsed, "headline")
 
@@ -99,8 +104,7 @@ defmodule Readability.MetadataFinder do
     authors
     |> Enum.map(&get_in(&1, ["name"]))
     |> Enum.filter(&is_binary/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.join(", ")
+    |> Enum.map_join(", ", &String.trim/1)
     |> case do
       "" -> nil
       names -> names
@@ -236,6 +240,7 @@ defmodule Readability.MetadataFinder do
   defp word_count(str) when is_binary(str) do
     str |> String.split(~r/\s+/) |> Enum.reject(&(&1 == "")) |> length()
   end
+
   defp word_count(_), do: 0
 
   @doc """
@@ -262,7 +267,7 @@ defmodule Readability.MetadataFinder do
 
     article_author =
       case values["article:author"] do
-        author when is_binary(author) -> unless is_url?(author), do: author
+        author when is_binary(author) -> if !is_url?(author), do: author
         _ -> nil
       end
 
@@ -322,9 +327,11 @@ defmodule Readability.MetadataFinder do
   end
 
   defp extract_text_from_node({"br", _, _}), do: "\n"
+
   defp extract_text_from_node({_, _, children}) do
     Enum.map_join(children, "", &extract_text_from_node/1)
   end
+
   defp extract_text_from_node(text) when is_binary(text), do: text
   defp extract_text_from_node(_), do: ""
 
@@ -358,8 +365,15 @@ defmodule Readability.MetadataFinder do
   end
 
   @excerpt_selectors [
-    "article p", "main p", ".content p", ".post-content p", ".entry-content p", "p",
-    "article div", "main div", "div"
+    "article p",
+    "main p",
+    ".content p",
+    ".post-content p",
+    ".entry-content p",
+    "p",
+    "article div",
+    "main div",
+    "div"
   ]
 
   defp extract_excerpt_from_content(html_tree) do
@@ -448,10 +462,12 @@ defmodule Readability.MetadataFinder do
       _ -> false
     end
   end
+
   defp is_url?(_), do: false
 
   # Unescape common HTML entities
   defp unescape_html_entities(nil), do: nil
+
   defp unescape_html_entities(str) when is_binary(str) do
     str
     |> String.replace("&quot;", "\"")
@@ -464,17 +480,20 @@ defmodule Readability.MetadataFinder do
 
   defp unescape_numeric_entities(str) do
     # Handle &#xHEX; entities
-    str = Regex.replace(~r/&#x([0-9a-fA-F]+);/, str, fn full_match, hex ->
-      case Integer.parse(hex, 16) do
-        {num, _} when num > 0 and num <= 0x10FFFF ->
-          try do
-            <<num::utf8>>
-          rescue
-            _ -> full_match
-          end
-        _ -> full_match
-      end
-    end)
+    str =
+      Regex.replace(~r/&#x([0-9a-fA-F]+);/, str, fn full_match, hex ->
+        case Integer.parse(hex, 16) do
+          {num, _} when num > 0 and num <= 0x10FFFF ->
+            try do
+              <<num::utf8>>
+            rescue
+              _ -> full_match
+            end
+
+          _ ->
+            full_match
+        end
+      end)
 
     # Handle &#DEC; entities
     Regex.replace(~r/&#([0-9]+);/, str, fn full_match, dec ->
@@ -485,7 +504,9 @@ defmodule Readability.MetadataFinder do
           rescue
             _ -> full_match
           end
-        _ -> full_match
+
+        _ ->
+          full_match
       end
     end)
   end

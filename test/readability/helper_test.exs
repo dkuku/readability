@@ -46,7 +46,8 @@ defmodule Readability.HelperTest do
     html =
       "<html><body><p>Hello <? echo esc_html( wired_get_the_byline_name( $related_video ) ); ?></p></body></html>"
       |> Helper.normalize()
-      |> LazyHTML.from_tree() |> LazyHTML.to_html()
+      |> LazyHTML.from_tree()
+      |> LazyHTML.to_html()
 
     assert html == "<html><head></head><body><p>Hello </p></body></html>"
   end
@@ -78,14 +79,13 @@ defmodule Readability.HelperTest do
     bar_url_https = "https://example.org/images/bar.png"
 
     result_without_scheme =
-      @sample
-      |> Helper.normalize(url: "example.org/blog/a-blog-post")
-      |> LazyHTML.from_tree() |> LazyHTML.to_html()
+      @sample |> Helper.normalize(url: "example.org/blog/a-blog-post") |> LazyHTML.from_tree() |> LazyHTML.to_html()
 
     result_with_scheme =
       @sample
       |> Helper.normalize(url: "https://example.org/blog/a-blog-post")
-      |> LazyHTML.from_tree() |> LazyHTML.to_html()
+      |> LazyHTML.from_tree()
+      |> LazyHTML.to_html()
 
     assert result_without_scheme =~ foo_url
     assert result_without_scheme =~ bar_url_http

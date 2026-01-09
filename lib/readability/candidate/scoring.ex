@@ -69,7 +69,9 @@ defmodule Readability.Candidate.Scoring do
 
   def calc_link_density(html_tree) do
     case Queries.text_length(html_tree) do
-      0 -> 0
+      0 ->
+        0
+
       text_length ->
         link_length = html_tree |> Queries.find_tag("a") |> Queries.text_length()
         link_length / text_length
@@ -79,7 +81,7 @@ defmodule Readability.Candidate.Scoring do
   defp calc_children_content_score({_, _, children_tree}) do
     children_tree
     |> Enum.filter(&(is_tuple(&1) && Readability.CandidateFinder.candidate_tag?(&1)))
-    |> calc_content_score
+    |> calc_content_score()
   end
 
   defp calc_grand_children_content_score({_, _, children_tree}) do
@@ -89,7 +91,7 @@ defmodule Readability.Candidate.Scoring do
       |> Enum.map(&elem(&1, 2))
       |> List.flatten()
       |> Enum.filter(&(is_tuple(&1) && Readability.CandidateFinder.candidate_tag?(&1)))
-      |> calc_content_score
+      |> calc_content_score()
 
     score / 2
   end

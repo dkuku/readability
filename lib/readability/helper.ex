@@ -116,7 +116,8 @@ defmodule Readability.Helper do
   defp transform_img_paths(html_str, nil), do: html_str
 
   defp transform_img_paths(html_str, url) do
-    Readability.regexes(:img_tag_src)
+    :img_tag_src
+    |> Readability.regexes()
     |> Regex.replace(html_str, &build_img_path(url, &1, &2, &3, &4))
   end
 

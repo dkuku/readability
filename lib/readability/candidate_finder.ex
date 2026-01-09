@@ -20,8 +20,7 @@ defmodule Readability.CandidateFinder do
   def find([], _, _), do: []
 
   def find([h | t], opts, tree_depth) do
-    [find(h, opts, tree_depth) | find(t, opts, tree_depth)]
-    |> List.flatten()
+    List.flatten([find(h, opts, tree_depth) | find(t, opts, tree_depth)])
   end
 
   def find(text, _, _) when is_binary(text), do: []
@@ -49,8 +48,7 @@ defmodule Readability.CandidateFinder do
   def find_best_candidate([]), do: nil
 
   def find_best_candidate(candidates) do
-    candidates
-    |> Enum.max_by(fn candidate -> candidate.score end)
+    Enum.max_by(candidates, fn candidate -> candidate.score end)
   end
 
   @doc """

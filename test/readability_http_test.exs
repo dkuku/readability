@@ -1,6 +1,8 @@
 defmodule ReadabilityHttpTest do
   use ExUnit.Case
+
   import Mock
+
   require IEx
 
   test "blank response is parsed as plain text" do
@@ -37,8 +39,7 @@ defmodule ReadabilityHttpTest do
     content = TestHelper.read_fixture("bbc.html")
     mimes = ["text/html", "application/xml", "application/xhtml+xml"]
 
-    mimes
-    |> Enum.each(fn mime ->
+    Enum.each(mimes, fn mime ->
       response = %HTTPoison.Response{
         status_code: 200,
         headers: [{"Content-Type", mime}],

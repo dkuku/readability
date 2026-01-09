@@ -76,11 +76,9 @@ defmodule Readability.Queries do
   @spec find_tag(html_tree, binary) :: list
   def find_tag(html_tree, tag), do: html_tree |> find_tag_internal(tag) |> List.flatten()
 
-  def find_tag_internal(nodes, tag) when is_list(nodes),
-    do: Enum.map(nodes, &find_tag_internal(&1, tag))
+  def find_tag_internal(nodes, tag) when is_list(nodes), do: Enum.map(nodes, &find_tag_internal(&1, tag))
 
-  def find_tag_internal({tag, _, children} = node, tag),
-    do: [node | find_tag_internal(children, tag)]
+  def find_tag_internal({tag, _, children} = node, tag), do: [node | find_tag_internal(children, tag)]
 
   def find_tag_internal({_, _, children}, tag), do: find_tag_internal(children, tag)
   def find_tag_internal(_, _), do: []

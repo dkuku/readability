@@ -6,9 +6,10 @@ defmodule Readability.ArticleBuilderTest do
   describe "build/2" do
     test "handles HTML without body tag (fallback candidate)" do
       html_tree = [
-        {"div", [], [
-          {"p", [], ["Some short text."]}
-        ]}
+        {"div", [],
+         [
+           {"p", [], ["Some short text."]}
+         ]}
       ]
 
       opts = [
@@ -40,11 +41,13 @@ defmodule Readability.ArticleBuilderTest do
 
     test "retries with different options when content is too short" do
       html_tree = [
-        {"body", [], [
-          {"div", [], [
-            {"p", [], ["Short."]}
-          ]}
-        ]}
+        {"body", [],
+         [
+           {"div", [],
+            [
+              {"p", [], ["Short."]}
+            ]}
+         ]}
       ]
 
       opts = [
@@ -63,12 +66,14 @@ defmodule Readability.ArticleBuilderTest do
       long_text = String.duplicate("This is some meaningful content. ", 10)
 
       html_tree = [
-        {"body", [], [
-          {"div", [{"class", "article"}], [
-            {"p", [], [long_text]},
-            {"p", [], ["Another paragraph with a sentence ending."]}
-          ]}
-        ]}
+        {"body", [],
+         [
+           {"div", [{"class", "article"}],
+            [
+              {"p", [], [long_text]},
+              {"p", [], ["Another paragraph with a sentence ending."]}
+            ]}
+         ]}
       ]
 
       opts = [
@@ -85,11 +90,13 @@ defmodule Readability.ArticleBuilderTest do
 
     test "converts non-p/div tags to div in article" do
       html_tree = [
-        {"body", [], [
-          {"article", [{"class", "content"}], [
-            {"p", [], [String.duplicate("Content here. ", 20)]}
-          ]}
-        ]}
+        {"body", [],
+         [
+           {"article", [{"class", "content"}],
+            [
+              {"p", [], [String.duplicate("Content here. ", 20)]}
+            ]}
+         ]}
       ]
 
       opts = [
@@ -107,15 +114,18 @@ defmodule Readability.ArticleBuilderTest do
 
     test "handles tree_text with nested elements" do
       html_tree = [
-        {"body", [], [
-          {"div", [{"class", "article"}], [
-            {"p", [], [
-              "Text before ",
-              {"span", [], ["nested text"]},
-              " text after."
+        {"body", [],
+         [
+           {"div", [{"class", "article"}],
+            [
+              {"p", [],
+               [
+                 "Text before ",
+                 {"span", [], ["nested text"]},
+                 " text after."
+               ]}
             ]}
-          ]}
-        ]}
+         ]}
       ]
 
       opts = [
