@@ -18,9 +18,8 @@ defmodule Readability.AuthorFinder do
     end
   end
 
-  defp find_by_meta_tag(html_tree) do
-    html_tree
-    |> LazyHTML.from_tree()
+  defp find_by_meta_tag(lazy) do
+    lazy
     |> LazyHTML.query("meta[name*=author], meta[property*=author]")
     |> LazyHTML.attribute("content")
     |> Enum.map(&String.trim/1)

@@ -104,11 +104,11 @@ defmodule ReadabilityTest do
   test "parse function works (deprecated)" do
     html = "<div>Test</div>"
     result = Readability.parse(html)
-    assert is_list(result)
+    assert %LazyHTML{} = result
   end
 
   test "regexes returns nil for unknown key" do
-    assert Readability.regexes(:unknown_key) == nil
+    assert Readability.Regex.regex(:unknown_key) == nil
   end
 
   test "default_options returns options list" do

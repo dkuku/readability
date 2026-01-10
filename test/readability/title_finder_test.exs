@@ -18,10 +18,9 @@ defmodule Readability.TitleFinderTest do
   </html>
   """
 
-  @html_tree @html |> LazyHTML.from_fragment() |> LazyHTML.to_tree()
-
   test "extract most proper title" do
-    title = Readability.TitleFinder.title(@html_tree)
+    lazy = LazyHTML.from_fragment(@html)
+    title = Readability.TitleFinder.title(lazy)
     assert title == "og title"
   end
 
@@ -44,7 +43,8 @@ defmodule Readability.TitleFinderTest do
   end
 
   test "extract og title" do
-    title = Readability.TitleFinder.og_title(@html_tree)
+    lazy = LazyHTML.from_fragment(@html)
+    title = Readability.TitleFinder.og_title(lazy)
     assert title == "og title"
   end
 
@@ -58,12 +58,15 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.og_title()
+    title =
+      html |> LazyHTML.from_fragment() |> Readability.TitleFinder.og_title()
+
     assert title == "og title 1"
   end
 
   test "extract tag title" do
-    title = Readability.TitleFinder.tag_title(@html_tree)
+    lazy = LazyHTML.from_document(@html)
+    title = Readability.TitleFinder.tag_title(lazy)
     assert title == "Tag title"
 
     html = """
@@ -74,7 +77,11 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "Tag title"
 
     html = """
@@ -85,7 +92,11 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "Tag title"
 
     html = """
@@ -96,7 +107,11 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "Tag title-tag"
 
     html = """
@@ -107,7 +122,11 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "Tag title-tag-title"
 
     html = """
@@ -121,7 +140,11 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "Tag title"
   end
 
@@ -135,17 +158,23 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_document() |> LazyHTML.to_tree() |> Readability.TitleFinder.tag_title()
+    title =
+      html
+      |> LazyHTML.from_document()
+      |> Readability.TitleFinder.tag_title()
+
     assert title == "tag title 1"
   end
 
   test "extract h1 tag title" do
-    title = Readability.TitleFinder.h_tag_title(@html_tree)
+    lazy = LazyHTML.from_fragment(@html)
+    title = Readability.TitleFinder.h_tag_title(lazy)
     assert title == "h1 title"
   end
 
   test "extract h2 tag title" do
-    title = Readability.TitleFinder.h_tag_title(@html_tree, "h2")
+    lazy = LazyHTML.from_fragment(@html)
+    title = Readability.TitleFinder.h_tag_title(lazy, "h2")
     assert title == "h2 title"
   end
 
@@ -159,19 +188,29 @@ defmodule Readability.TitleFinderTest do
     </html>
     """
 
-    title = html |> LazyHTML.from_fragment() |> LazyHTML.to_tree() |> Readability.TitleFinder.h_tag_title()
+    title =
+      html
+      |> LazyHTML.from_fragment()
+      |> Readability.TitleFinder.h_tag_title()
+
     assert title == "header 1"
   end
 
   test "returns an empty string when no title tag can be found" do
-    assert Readability.TitleFinder.tag_title([]) == ""
+    empty_html = "<html><head></head><body></body></html>"
+    lazy = LazyHTML.from_document(empty_html)
+    assert Readability.TitleFinder.tag_title(lazy) == ""
   end
 
   test "returns an empty string when no og:title tag can be found" do
-    assert Readability.TitleFinder.og_title([]) == ""
+    empty_html = "<html><head></head><body></body></html>"
+    lazy = LazyHTML.from_document(empty_html)
+    assert Readability.TitleFinder.og_title(lazy) == ""
   end
 
   test "returns an empty string when no header tag can be found" do
-    assert Readability.TitleFinder.h_tag_title([]) == ""
+    empty_html = "<html><head></head><body></body></html>"
+    lazy = LazyHTML.from_document(empty_html)
+    assert Readability.TitleFinder.h_tag_title(lazy) == ""
   end
 end

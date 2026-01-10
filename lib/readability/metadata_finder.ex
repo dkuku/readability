@@ -5,6 +5,7 @@ defmodule Readability.MetadataFinder do
   """
 
   @type html_tree :: tuple | list
+  @type lazy :: LazyHTML.t()
 
   # property pattern: matches patterns like:
   # - article:author, dc:title, og:description, twitter:title
@@ -27,15 +28,18 @@ defmodule Readability.MetadataFinder do
   Extract JSON-LD metadata from script tags.
   Mozilla Readability.js gives precedence to Schema.org JSON-LD data.
   """
-  @spec extract_json_ld(html_tree) :: map
-  def extract_json_ld(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
-    scripts = lazy |> LazyHTML.query("script[type='application/ld+json']") |> LazyHTML.to_tree()
-
-    Enum.find_value(scripts, %{}, fn script ->
+  @spec extract_json_ld(lazy) :: map
+  def extract_json_ld(lazy) do
+    lazy
+    |> LazyHTML.query("script[type='application/ld+json']")
+    |> LazyHTML.to_tree()
+    |> Enum.find_value(%{}, fn script ->
       case script do
         {_, _, [content]} when is_binary(content) ->
-          parse_json_ld(content)
+          case parse_json_ld(content) do
+            %{} = result when map_size(result) > 0 -> result
+            _ -> nil
+          end
 
         _ ->
           nil
@@ -55,10 +59,21 @@ defmodule Readability.MetadataFinder do
   end
 
   defp find_article_in_json_ld(parsed) when is_list(parsed) do
-    Enum.find(parsed, fn item ->
-      type = item["@type"]
-      type && Regex.match?(@json_ld_article_types, type)
-    end)
+    # First try to find Article type specifically
+    article_specific =
+      Enum.find(parsed, fn item ->
+        type = item["@type"]
+        type && type == "Article"
+      end)
+
+    if article_specific,
+      do: article_specific,
+      # Fall back to any article type
+      else:
+        Enum.find(parsed, fn item ->
+          type = item["@type"]
+          type && Regex.match?(@json_ld_article_types, type)
+        end)
   end
 
   defp find_article_in_json_ld(%{"@graph" => graph}) when is_list(graph) do
@@ -76,7 +91,7 @@ defmodule Readability.MetadataFinder do
       {:title, extract_json_ld_title(parsed)},
       {:byline, extract_json_ld_byline(parsed)},
       {:excerpt, get_trimmed_string(parsed, "description")},
-      {:site_name, parsed |> get_in(["publisher", "name"]) |> trim_if_binary()},
+      {:site_name, extract_publisher_name(parsed)},
       {:published_time, get_trimmed_string(parsed, "datePublished")}
     ]
     |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
@@ -84,7 +99,7 @@ defmodule Readability.MetadataFinder do
   end
 
   defp extract_json_ld_title(parsed) do
-    publisher_name = parsed |> get_in(["publisher", "name"]) |> trim_if_binary()
+    publisher_name = extract_publisher_name(parsed)
     name = get_trimmed_string(parsed, "name")
     headline = get_trimmed_string(parsed, "headline")
 
@@ -93,6 +108,14 @@ defmodule Readability.MetadataFinder do
       name -> name
       headline -> headline
       true -> nil
+    end
+  end
+
+  defp extract_publisher_name(parsed) do
+    case parsed["publisher"] do
+      %{"name" => name} when is_binary(name) -> String.trim(name)
+      [%{"name" => name} | _] when is_binary(name) -> String.trim(name)
+      _ -> nil
     end
   end
 
@@ -129,66 +152,62 @@ defmodule Readability.MetadataFinder do
   Handles space-separated property values (e.g., property="dc:title og:title").
   """
   @spec collect_meta_values(html_tree) :: map
-  def collect_meta_values(html_tree) do
+  def collect_meta_values(lazy) do
     meta_elements =
-      html_tree
-      |> LazyHTML.from_tree()
+      lazy
       |> LazyHTML.query("meta")
       |> LazyHTML.to_tree()
 
-    meta_elements
-    |> Enum.reduce(%{}, &collect_property_values/2)
-    |> then(&Enum.reduce(meta_elements, &1, fn el, acc -> collect_name_values(el, acc) end))
-  end
+    # Process all meta elements using for comprehension
+    for meta_element <- meta_elements, reduce: %{} do
+      acc ->
+        case meta_element do
+          {_, attrs, _} ->
+            attrs_map = Map.new(attrs)
+            content = attrs_map["content"] || ""
+            property = attrs_map["property"] || ""
+            name = attrs_map["name"] || ""
 
-  defp collect_property_values({_, attrs, _}, acc) do
-    attrs_map = Map.new(attrs)
+            cond do
+              # Process property-based meta tags
+              property != "" && content != "" ->
+                property
+                |> String.split(~r/\s+/)
+                |> Enum.filter(&Regex.match?(@property_pattern, &1))
+                |> Enum.reduce(acc, fn prop, inner_acc ->
+                  key = prop |> String.downcase() |> String.replace(~r/\s/, "") |> normalize_property_key()
+                  Map.put_new(inner_acc, key, String.trim(content))
+                end)
 
-    with content when content != "" <- attrs_map["content"] |> to_string() |> String.trim(),
-         property when property != "" <- attrs_map["property"] || "" do
-      property
-      |> String.split(~r/\s+/)
-      |> Enum.filter(&Regex.match?(@property_pattern, &1))
-      |> Enum.reduce(acc, fn prop, inner_acc ->
-        key = prop |> String.downcase() |> String.replace(~r/\s/, "") |> normalize_property_key()
-        Map.put_new(inner_acc, key, content)
-      end)
-    else
-      _ -> acc
+              # Process name-based meta tags
+              name != "" && content != "" && Regex.match?(@name_pattern, name) ->
+                key = name |> String.downcase() |> String.replace(~r/\s/, "") |> String.replace(".", ":")
+                Map.put_new(acc, key, String.trim(content))
+
+              true ->
+                acc
+            end
+
+          _ ->
+            acc
+        end
     end
   end
-
-  defp collect_property_values(_, acc), do: acc
-
-  defp collect_name_values({_, attrs, _}, acc) do
-    attrs_map = Map.new(attrs)
-
-    with content when content != "" <- attrs_map["content"] |> to_string() |> String.trim(),
-         name when name != "" <- attrs_map["name"] || "",
-         true <- Regex.match?(@name_pattern, name) do
-      key = name |> String.downcase() |> String.replace(~r/\s/, "") |> String.replace(".", ":")
-      Map.put_new(acc, key, content)
-    else
-      _ -> acc
-    end
-  end
-
-  defp collect_name_values(_, acc), do: acc
 
   @doc """
   Extract title following Mozilla Readability.js priority order:
   JSON-LD -> dc:title -> dcterm:title -> og:title -> weibo:article:title -> weibo:webpage:title -> title -> twitter:title -> parsely-title
   Falls back to _getArticleTitle() logic if none found.
   """
-  @spec title(html_tree) :: binary | nil
+  @spec title(lazy) :: binary | nil
   @title_keys ~w(dc:title dcterm:title og:title weibo:article:title weibo:webpage:title title twitter:title parsely-title)
 
-  def title(html_tree) do
-    html_tree
+  def title(lazy) do
+    lazy
     |> extract_json_ld()
     |> Map.get(:title)
     |> case do
-      nil -> html_tree |> collect_meta_values() |> first_matching_value(@title_keys)
+      nil -> lazy |> collect_meta_values() |> first_matching_value(@title_keys)
       title -> title
     end
     |> unescape_html_entities()
@@ -248,22 +267,22 @@ defmodule Readability.MetadataFinder do
   JSON-LD -> dc:creator -> dcterm:creator -> author -> parsely-author -> article:author (if not URL)
   Also tries to extract from DOM elements with author-related attributes.
   """
-  @spec byline(html_tree) :: binary | nil
+  @spec byline(lazy) :: binary | nil
   @byline_keys ~w(dc:creator dcterm:creator author parsely-author byl)
 
-  def byline(html_tree) do
-    html_tree
+  def byline(lazy) do
+    lazy
     |> extract_json_ld()
     |> Map.get(:byline)
     |> case do
-      nil -> extract_byline_from_meta(html_tree)
+      nil -> extract_byline_from_meta(lazy)
       byline -> byline
     end
     |> unescape_html_entities()
   end
 
-  defp extract_byline_from_meta(html_tree) do
-    values = collect_meta_values(html_tree)
+  defp extract_byline_from_meta(lazy) do
+    values = collect_meta_values(lazy)
 
     article_author =
       case values["article:author"] do
@@ -276,7 +295,7 @@ defmodule Readability.MetadataFinder do
     |> Kernel.++([article_author])
     |> Enum.find_value(&clean_byline/1)
     |> case do
-      nil -> extract_byline_from_dom(html_tree)
+      nil -> extract_byline_from_dom(lazy)
       result -> result
     end
   end
@@ -294,23 +313,37 @@ defmodule Readability.MetadataFinder do
     end
   end
 
-  @byline_selectors ~w(
-    .author_byline .byline-name .byline
-    [itemprop='author'][itemprop='name'] [itemprop='author'] [rel='author']
-    .author-name .post-author .article-author .entry-author .author
-    [class*='byline'] [class*='author']
-  )
+  # Mozilla Readability extracts byline during article parsing from nodes with
+  # rel="author" or itemprop containing "author", checking for [itemprop="name"] child.
+  # We use a conservative subset of selectors to avoid false positives.
+  @byline_selectors [
+    "[itemprop='author'] [itemprop='name']",
+    "[rel='author']",
+    ".byline [itemprop='name']",
+    ".byline-name"
+  ]
 
-  defp extract_byline_from_dom(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
-
+  defp extract_byline_from_dom(lazy) do
     Enum.find_value(@byline_selectors, fn selector ->
       lazy
-      |> LazyHTML.query(selector)
-      |> LazyHTML.to_tree()
-      |> List.first()
-      |> extract_valid_text(1, 150)
+      |> LazyHTML.query(selector <> ":first-of-type")
+      |> extract_valid_text(1, 100)
+      |> clean_byline_text()
     end)
+  end
+
+  # Clean byline text by removing common prefixes and trailing punctuation
+  defp clean_byline_text(nil), do: nil
+
+  defp clean_byline_text(text) do
+    text
+    |> String.replace(~r/^(by|por|von|par)\s+/i, "")
+    |> String.replace(~r/[\s\p{Pd}—–]+$/u, "")
+    |> String.trim()
+    |> case do
+      "" -> nil
+      cleaned -> cleaned
+    end
   end
 
   defp extract_valid_text(nil, _min, _max), do: nil
@@ -330,6 +363,8 @@ defmodule Readability.MetadataFinder do
 
   defp extract_text_from_node({_, _, children}) do
     Enum.map_join(children, "", &extract_text_from_node/1)
+  rescue
+    _ -> ""
   end
 
   defp extract_text_from_node(text) when is_binary(text), do: text
@@ -341,20 +376,20 @@ defmodule Readability.MetadataFinder do
   weibo:webpage:description -> description -> twitter:description
   Falls back to first paragraph of article content if no meta description.
   """
-  @spec excerpt(html_tree) :: binary | nil
+  @spec excerpt(lazy) :: binary | nil
   @excerpt_keys ~w(dc:description dcterm:description og:description weibo:article:description weibo:webpage:description description twitter:description)
 
-  def excerpt(html_tree) do
-    html_tree
+  def excerpt(lazy) do
+    lazy
     |> extract_json_ld()
     |> Map.get(:excerpt)
     |> case do
       nil ->
-        html_tree
+        lazy
         |> collect_meta_values()
         |> first_matching_value(@excerpt_keys)
         |> case do
-          nil -> extract_excerpt_from_content(html_tree)
+          nil -> extract_excerpt_from_content(lazy)
           result -> result
         end
 
@@ -376,14 +411,12 @@ defmodule Readability.MetadataFinder do
     "div"
   ]
 
-  defp extract_excerpt_from_content(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
-
+  defp extract_excerpt_from_content(lazy) do
     Enum.find_value(@excerpt_selectors, fn selector ->
       lazy
       |> LazyHTML.query(selector)
       |> LazyHTML.to_tree()
-      |> Enum.find_value(&extract_valid_text(&1, 1, :infinity))
+      |> Enum.find_value(&extract_valid_text(&1, 1, 500))
     end)
   end
 
@@ -391,13 +424,13 @@ defmodule Readability.MetadataFinder do
   Extract site name from meta tags.
   Priority: JSON-LD -> og:site_name
   """
-  @spec site_name(html_tree) :: binary | nil
-  def site_name(html_tree) do
-    html_tree
+  @spec site_name(lazy) :: binary | nil
+  def site_name(lazy) do
+    lazy
     |> extract_json_ld()
     |> Map.get(:site_name)
     |> case do
-      nil -> html_tree |> collect_meta_values() |> Map.get("og:site_name")
+      nil -> lazy |> collect_meta_values() |> Map.get("og:site_name")
       site_name -> site_name
     end
     |> unescape_html_entities()
@@ -407,11 +440,11 @@ defmodule Readability.MetadataFinder do
   Extract published time from meta tags.
   Priority: article:published_time -> parsely-pub-date
   """
-  @spec published_time(html_tree) :: binary | nil
+  @spec published_time(lazy) :: binary | nil
   @published_time_keys ~w(article:published_time parsely-pub-date)
 
-  def published_time(html_tree) do
-    html_tree
+  def published_time(lazy) do
+    lazy
     |> collect_meta_values()
     |> first_matching_value(@published_time_keys)
     |> unescape_html_entities()
@@ -420,23 +453,20 @@ defmodule Readability.MetadataFinder do
   @doc """
   Extract language from html tag or meta tags.
   """
-  @spec lang(html_tree) :: binary | nil
-  def lang(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
-
+  @spec lang(lazy) :: binary | nil
+  def lang(lazy) do
     get_first_attr(lazy, "html", "lang") ||
       get_first_attr(lazy, "meta[http-equiv='content-language']", "content")
   end
 
   @doc """
-  Extract text direction from html, body, or article elements.
-  Mozilla Readability.js checks ancestors of the article content.
+  Extract text direction from html, body, or main elements.
+  Mozilla Readability.js checks ancestors of the article content (not article itself).
   """
-  @spec dir(html_tree) :: binary | nil
-  @dir_selectors ~w(article body html)
+  @spec dir(lazy) :: binary | nil
+  @dir_selectors ~w(main body html)
 
-  def dir(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
+  def dir(lazy) do
     Enum.find_value(@dir_selectors, &get_first_attr(lazy, &1, "dir"))
   end
 
@@ -478,6 +508,9 @@ defmodule Readability.MetadataFinder do
     |> unescape_numeric_entities()
   end
 
+  # Unicode replacement character for invalid codepoints
+  @replacement_char "\uFFFD"
+
   defp unescape_numeric_entities(str) do
     # Handle &#xHEX; entities
     str =
@@ -487,8 +520,12 @@ defmodule Readability.MetadataFinder do
             try do
               <<num::utf8>>
             rescue
-              _ -> full_match
+              _ -> @replacement_char
             end
+
+          {num, _} when num == 0 or num > 0x10FFFF ->
+            # Invalid codepoint - use replacement character
+            @replacement_char
 
           _ ->
             full_match
@@ -502,8 +539,12 @@ defmodule Readability.MetadataFinder do
           try do
             <<num::utf8>>
           rescue
-            _ -> full_match
+            _ -> @replacement_char
           end
+
+        {num, _} when num == 0 or num > 0x10FFFF ->
+          # Invalid codepoint - use replacement character
+          @replacement_char
 
         _ ->
           full_match

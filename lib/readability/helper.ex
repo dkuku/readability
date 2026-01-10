@@ -81,20 +81,21 @@ defmodule Readability.Helper do
   end
 
   @doc """
-  Normalizes and parses to HTML tree (tuple or list)) from binary HTML.
+  Normalizes and parses to LazyHTML from binary HTML.
   """
   @spec normalize(binary, list) :: html_tree
   def normalize(raw_html, opts \\ []) do
     raw_html
-    |> String.replace(Readability.regexes(:replace_xml_version), "")
-    |> String.replace(Readability.regexes(:replace_brs), "</p><p>")
-    |> String.replace(Readability.regexes(:replace_fonts), "<\\1span>")
-    |> String.replace(Readability.regexes(:normalize), " ")
+    |> String.replace(Readability.Regex.regex(:replace_xml_version), "")
+    |> String.replace(Readability.Regex.regex(:replace_brs), "</p><p>")
+    |> String.replace(Readability.Regex.regex(:replace_fonts), "<\\1span>")
+    |> String.replace(Readability.Regex.regex(:normalize), " ")
     |> transform_img_paths(opts[:url])
     |> LazyHTML.from_document()
     |> LazyHTML.to_tree()
     |> filter_out_comments()
     |> remove_tag(fn {tag, _, _} -> is_atom(tag) end)
+    |> LazyHTML.from_tree()
   end
 
   defp filter_out_comments(nodes) when is_list(nodes) do
@@ -117,7 +118,7 @@ defmodule Readability.Helper do
 
   defp transform_img_paths(html_str, url) do
     :img_tag_src
-    |> Readability.regexes()
+    |> Readability.Regex.regex()
     |> Regex.replace(html_str, &build_img_path(url, &1, &2, &3, &4))
   end
 

@@ -15,9 +15,7 @@ defmodule Readability.PublishedAtFinder do
     {"[data-datetime]", "data-datetime"}
   ]
 
-  def find(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
-
+  def find(lazy) do
     @selectors
     |> Enum.find_value(fn {selector, attr} -> query_first_attr(lazy, selector, attr) end)
     |> case do

@@ -46,7 +46,6 @@ defmodule Readability.HelperTest do
     html =
       "<html><body><p>Hello <? echo esc_html( wired_get_the_byline_name( $related_video ) ); ?></p></body></html>"
       |> Helper.normalize()
-      |> LazyHTML.from_tree()
       |> LazyHTML.to_html()
 
     assert html == "<html><head></head><body><p>Hello </p></body></html>"
@@ -67,7 +66,7 @@ defmodule Readability.HelperTest do
     </div>
     """
 
-    result = input_html |> Helper.normalize() |> LazyHTML.from_tree() |> LazyHTML.to_html()
+    result = input_html |> Helper.normalize() |> LazyHTML.to_html()
     assert result =~ "<span>Hello</span>"
     assert result =~ "<span>World</span>"
     refute result =~ "<font>"
@@ -79,12 +78,13 @@ defmodule Readability.HelperTest do
     bar_url_https = "https://example.org/images/bar.png"
 
     result_without_scheme =
-      @sample |> Helper.normalize(url: "example.org/blog/a-blog-post") |> LazyHTML.from_tree() |> LazyHTML.to_html()
+      @sample
+      |> Helper.normalize(url: "example.org/blog/a-blog-post")
+      |> LazyHTML.to_html()
 
     result_with_scheme =
       @sample
       |> Helper.normalize(url: "https://example.org/blog/a-blog-post")
-      |> LazyHTML.from_tree()
       |> LazyHTML.to_html()
 
     assert result_without_scheme =~ foo_url
@@ -139,7 +139,7 @@ defmodule Readability.HelperTest do
   test "normalize filters out HTML comments" do
     html = "<div><!-- comment -->Hello</div>"
     result = Helper.normalize(html)
-    html_str = result |> LazyHTML.from_tree() |> LazyHTML.to_html()
+    html_str = LazyHTML.to_html(result)
     refute html_str =~ "comment"
     assert html_str =~ "Hello"
   end

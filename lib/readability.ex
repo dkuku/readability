@@ -57,6 +57,7 @@ defmodule Readability do
 
   @type html_tree :: tuple | list
   @type raw_html :: binary
+  @type lazy :: LazyHTML.t()
   @type url :: binary
   @type options :: list
   @type headers :: list[tuple]
@@ -134,35 +135,34 @@ defmodule Readability do
   def title(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> title()
   end
 
-  def title(html_tree) do
-    case MetadataFinder.title(html_tree) do
-      nil -> get_article_title(html_tree)
-      "" -> get_article_title(html_tree)
+  def title(lazy) do
+    case MetadataFinder.title(lazy) do
+      nil -> get_article_title(lazy)
+      "" -> get_article_title(lazy)
       title -> title
     end
   end
 
-  defp get_article_title(html_tree) do
-    lazy = LazyHTML.from_tree(html_tree)
+  defp get_article_title(lazy) do
     raw_title = get_tag_text(lazy, "title")
     h1_title = get_tag_text(lazy, "h1")
 
     case raw_title do
       nil -> h1_title || ""
       "" -> h1_title || ""
-      title -> MetadataFinder.clean_title(title, html_tree)
+      title -> MetadataFinder.clean_title(title, lazy)
     end
   end
 
   defp get_tag_text(lazy, selector) do
-    case lazy |> LazyHTML.query(selector) |> LazyHTML.to_tree() do
-      [] -> nil
-      [first | _] -> [first] |> LazyHTML.from_tree() |> LazyHTML.text() |> String.trim() |> non_empty_or_nil()
-    end
+    lazy
+    |> LazyHTML.query(selector <> ":first-child")
+    |> LazyHTML.text()
+    |> String.trim()
+    |> non_empty_or_nil()
   end
 
   defp non_empty_or_nil(""), do: nil
@@ -178,7 +178,8 @@ defmodule Readability do
 
   """
   @spec authors(binary | html_tree) :: list[binary]
-  def authors(html) when is_binary(html), do: html |> LazyHTML.from_document() |> LazyHTML.to_tree() |> authors()
+  def authors(html) when is_binary(html), do: html |> LazyHTML.from_document() |> authors()
+
   def authors(html_tree), do: AuthorFinder.find(html_tree)
 
   @doc """
@@ -194,7 +195,6 @@ defmodule Readability do
   def byline(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> byline()
   end
 
@@ -213,7 +213,6 @@ defmodule Readability do
   def published_at(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> published_at()
   end
 
@@ -232,7 +231,6 @@ defmodule Readability do
   def excerpt(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> excerpt()
   end
 
@@ -251,7 +249,6 @@ defmodule Readability do
   def site_name(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> site_name()
   end
 
@@ -270,7 +267,6 @@ defmodule Readability do
   def lang(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> lang()
   end
 
@@ -289,7 +285,6 @@ defmodule Readability do
   def dir(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
     |> dir()
   end
 
@@ -320,7 +315,7 @@ defmodule Readability do
   @spec readable_html(html_tree) :: binary
   def readable_html(html_tree) do
     html_tree
-    |> Helper.remove_attrs(regexes(:protect_attrs))
+    |> Helper.remove_attrs(Readability.Regex.regex(:protect_attrs))
     |> raw_html()
   end
 
@@ -352,40 +347,14 @@ defmodule Readability do
     [html_tree] |> LazyHTML.from_tree() |> LazyHTML.to_html()
   end
 
-  @deprecated "Use `LazyHTML.from_document/1` or `LazyHTML.from_fragment/1` instead."
-  def parse(raw_html) when is_binary(raw_html) do
-    raw_html |> LazyHTML.from_document() |> LazyHTML.to_tree()
+  def raw_html(%LazyHTML{} = lazy) do
+    LazyHTML.to_html(lazy)
   end
 
-  def regexes(:unlikely_candidate),
-    do:
-      ~r/combx|comment|community|disqus|extra|foot|header|hidden|lightbox|modal|menu|meta|nav|remark|rss|shoutbox|sidebar|sponsor|ad-break|agegate|pagination|pager|popup/i
-
-  def regexes(:ok_maybe_its_a_candidate), do: ~r/and|article|body|column|main|shadow/i
-
-  def regexes(:positive), do: ~r/article|body|content|entry|hentry|main|page|pagination|post|text|blog|story/i
-
-  def regexes(:negative),
-    do:
-      ~r/hidden|^hid|combx|comment|com-|contact|foot|footer|footnote|link|masthead|media|meta|outbrain|promo|related|scroll|shoutbox|sidebar|sponsor|shopping|tags|tool|utility|widget/i
-
-  def regexes(:div_to_p_elements), do: ~r/<(a|blockquote|dl|div|img|ol|p|pre|table|ul)/i
-
-  def regexes(:replace_brs), do: ~r/(<br[^>]*>[ \n\r\t]*){2,}/i
-
-  def regexes(:replace_fonts), do: ~r/<(\/?)font[^>]*>/i
-
-  def regexes(:replace_xml_version), do: ~r/<\?xml.*\?>/i
-
-  def regexes(:normalize), do: ~r/\s{2,}/
-
-  def regexes(:video), do: ~r/\/\/(www\.)?(dailymotion|youtube|youtube-nocookie|player\.vimeo)\.com/i
-
-  def regexes(:protect_attrs), do: ~r/^(?!id|rel|for|summary|title|href|src|alt|srcdoc)/i
-
-  def regexes(:img_tag_src), do: ~r/(<img.*src=['"])([^'"]+)(['"][^>]*>)/Ui
-
-  def regexes(_key), do: nil
+  @deprecated "Use `LazyHTML.from_document/1` or `LazyHTML.from_fragment/1` instead."
+  def parse(raw_html) when is_binary(raw_html) do
+    LazyHTML.from_document(raw_html)
+  end
 
   def default_options, do: @default_options
 end

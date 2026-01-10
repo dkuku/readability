@@ -34,7 +34,8 @@ defmodule Readability.Candidate.Cleaner do
   end
 
   defp misused_divs?("div", inner_tree) do
-    !(inner_tree |> LazyHTML.from_tree() |> LazyHTML.to_html() =~ Readability.regexes(:div_to_p_elements))
+    !(inner_tree |> LazyHTML.from_tree() |> LazyHTML.to_html() =~
+        Readability.Regex.regex(:div_to_p_elements))
   end
 
   defp misused_divs?(_, _), do: false
@@ -47,7 +48,7 @@ defmodule Readability.Candidate.Cleaner do
 
     str = tag <> idclass_str
 
-    str =~ Readability.regexes(:unlikely_candidate) &&
-      !(str =~ Readability.regexes(:ok_maybe_its_a_candidate)) && tag != "html"
+    str =~ Readability.Regex.regex(:unlikely_candidate) &&
+      !(str =~ Readability.Regex.regex(:ok_maybe_its_a_candidate)) && tag != "html"
   end
 end

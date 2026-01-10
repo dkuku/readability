@@ -57,7 +57,7 @@ defmodule Readability.Sanitizer do
     embed_len =
       tree
       |> Queries.find_tag("embed")
-      |> Enum.reject(&(&1 =~ Readability.regexes(:video)))
+      |> Enum.reject(&(&1 =~ Readability.Regex.regex(:video)))
       |> length()
 
     link_density = Scoring.calc_link_density(tree)
@@ -81,7 +81,7 @@ defmodule Readability.Sanitizer do
 
   defp clean_unlikely_tag?({tag, attrs, _}) do
     attrs_str = Enum.map_join(attrs, "", &elem(&1, 1))
-    tag =~ ~r/form|object|iframe|embed/ && !(attrs_str =~ Readability.regexes(:video))
+    tag =~ ~r/form|object|iframe|embed/ && !(attrs_str =~ Readability.Regex.regex(:video))
   end
 
   defp clean_empty_p?({tag, _, _} = html_tree) do

@@ -47,8 +47,8 @@ defmodule Readability.Candidate.Scoring do
   def class_weight(attrs) do
     class = get_attr(attrs, "class")
     id = get_attr(attrs, "id")
-    positive = Readability.regexes(:positive)
-    negative = Readability.regexes(:negative)
+    positive = Readability.Regex.regex(:positive)
+    negative = Readability.Regex.regex(:negative)
 
     0
     |> add_weight(class =~ positive, 25)

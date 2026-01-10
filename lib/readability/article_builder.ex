@@ -22,7 +22,26 @@ defmodule Readability.ArticleBuilder do
   @spec build(html_tree, options) :: html_tree
   @removable_tags ~w(script style)
 
+  def build(%LazyHTML{} = lazy, opts) do
+    build(lazy, opts, 0)
+  end
+
+  def build(%LazyHTML{} = lazy, opts, depth) when depth < 5 do
+    lazy
+    |> LazyHTML.to_tree()
+    |> build(opts, depth + 1)
+  end
+
+  def build(%LazyHTML{} = lazy, _opts, _depth) do
+    # Fallback to prevent infinite recursion
+    LazyHTML.to_tree(lazy)
+  end
+
   def build(html_tree, opts) do
+    build(html_tree, opts, 0)
+  end
+
+  def build(html_tree, opts, depth) when is_list(html_tree) do
     origin_tree = html_tree
 
     prepared =
@@ -41,10 +60,10 @@ defmodule Readability.ArticleBuilder do
       |> find_article(prepared)
       |> Sanitizer.sanitize(candidates, opts)
 
-    if Queries.text_length(result) < opts[:retry_length] do
+    if Queries.text_length(result) < opts[:retry_length] and depth < 3 do
       case next_try_opts(opts) do
         nil -> Queries.clear_stats_from_attributes(result)
-        new_opts -> build(origin_tree, new_opts)
+        new_opts -> build(origin_tree, new_opts, depth + 1)
       end
     else
       Queries.clear_stats_from_attributes(result)

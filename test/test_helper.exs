@@ -11,7 +11,6 @@ defmodule TestHelper do
     file_name
     |> read_fixture()
     |> LazyHTML.from_document()
-    |> LazyHTML.to_tree()
   end
 end
 
