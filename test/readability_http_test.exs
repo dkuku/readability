@@ -1,37 +1,39 @@
 defmodule ReadabilityHttpTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
-  import Mock
-
-  require IEx
+  setup do
+    Application.put_env(:readability, :req_options, plug: {Req.Test, Readability})
+    :ok
+  end
 
   test "blank response is parsed as plain text" do
     url = "https://tools.ietf.org/rfc/rfc2616.txt"
     content = TestHelper.read_fixture("rfc2616.txt")
-    response = %HTTPoison.Response{status_code: 200, headers: [], body: content}
 
-    with_mock HTTPoison, get!: fn _url, _headers, _opts -> response end do
-      %Readability.Summary{article_text: result_text} = Readability.summarize(url)
+    Req.Test.stub(Readability, fn conn ->
+      conn
+      |> Plug.Conn.delete_resp_header("content-type")
+      |> Plug.Conn.resp(200, content)
+    end)
 
-      assert result_text =~ ~r/3 Protocol Parameters/
-    end
+    %Readability.Summary{article_text: result_text} = Readability.summarize(url)
+
+    assert result_text =~ ~r/3 Protocol Parameters/
   end
 
   test "text/plain response is parsed as plain text" do
     url = "https://tools.ietf.org/rfc/rfc2616.txt"
     content = TestHelper.read_fixture("rfc2616.txt")
 
-    response = %HTTPoison.Response{
-      status_code: 200,
-      headers: [{"Content-Type", "text/plain"}],
-      body: content
-    }
+    Req.Test.stub(Readability, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("content-type", "text/plain")
+      |> Plug.Conn.resp(200, content)
+    end)
 
-    with_mock HTTPoison, get!: fn _url, _headers, _opts -> response end do
-      %Readability.Summary{article_text: result_text} = Readability.summarize(url)
+    %Readability.Summary{article_text: result_text} = Readability.summarize(url)
 
-      assert result_text =~ ~r/3 Protocol Parameters/
-    end
+    assert result_text =~ ~r/3 Protocol Parameters/
   end
 
   test "*ml responses are parsed as markup" do
@@ -40,17 +42,15 @@ defmodule ReadabilityHttpTest do
     mimes = ["text/html", "application/xml", "application/xhtml+xml"]
 
     Enum.each(mimes, fn mime ->
-      response = %HTTPoison.Response{
-        status_code: 200,
-        headers: [{"Content-Type", mime}],
-        body: content
-      }
+      Req.Test.stub(Readability, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("content-type", mime)
+        |> Plug.Conn.resp(200, content)
+      end)
 
-      with_mock HTTPoison, get!: fn _url, _headers, _opts -> response end do
-        %Readability.Summary{article_html: result_html} = Readability.summarize(url)
+      %Readability.Summary{article_html: result_html} = Readability.summarize(url)
 
-        assert result_html =~ ~r/connected computing devices/
-      end
+      assert result_html =~ ~r/connected computing devices/
     end)
   end
 
@@ -58,17 +58,15 @@ defmodule ReadabilityHttpTest do
     url = "https://news.bbc.co.uk/test.html"
     content = TestHelper.read_fixture("bbc.html")
 
-    response = %HTTPoison.Response{
-      status_code: 200,
-      headers: [{"Content-Type", "text/html; charset=UTF-8"}],
-      body: content
-    }
+    Req.Test.stub(Readability, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("content-type", "text/html; charset=UTF-8")
+      |> Plug.Conn.resp(200, content)
+    end)
 
-    with_mock HTTPoison, get!: fn _url, _headers, _opts -> response end do
-      %Readability.Summary{article_html: result_html} = Readability.summarize(url)
+    %Readability.Summary{article_html: result_html} = Readability.summarize(url)
 
-      assert result_html =~ ~r/connected computing devices/
-    end
+    assert result_html =~ ~r/connected computing devices/
   end
 
   test "response with content-type in different case is parsed correctly" do
@@ -76,16 +74,29 @@ defmodule ReadabilityHttpTest do
     url = "https://news.bbc.co.uk/test.html"
     content = TestHelper.read_fixture("bbc.html")
 
-    response = %HTTPoison.Response{
-      status_code: 200,
-      headers: [{"content-Type", "text/html; charset=UTF-8"}],
-      body: content
-    }
+    Req.Test.stub(Readability, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("content-type", "text/html; charset=UTF-8")
+      |> Plug.Conn.resp(200, content)
+    end)
 
-    with_mock HTTPoison, get!: fn _url, _headers, _opts -> response end do
-      %Readability.Summary{article_html: result_html} = Readability.summarize(url)
+    %Readability.Summary{article_html: result_html} = Readability.summarize(url)
 
-      assert result_html =~ ~r/connected computing devices/
-    end
+    assert result_html =~ ~r/connected computing devices/
+    assert Readability.mime([{"content-Type", "text/html; charset=UTF-8"}]) == "text/html; charset=UTF-8"
+  end
+
+  test "custom req_options can be passed to summarize" do
+    url = "https://news.bbc.co.uk/test.html"
+    content = TestHelper.read_fixture("bbc.html")
+
+    Req.Test.stub(CustomStub, fn conn ->
+      Req.Test.html(conn, content)
+    end)
+
+    %Readability.Summary{article_html: result_html} =
+      Readability.summarize(url, req_options: [plug: {Req.Test, CustomStub}])
+
+    assert result_html =~ ~r/connected computing devices/
   end
 end

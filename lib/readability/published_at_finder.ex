@@ -8,7 +8,7 @@ defmodule Readability.PublishedAtFinder do
   @doc """
   Extract the published at.
   """
-  @spec find(html_tree) :: %DateTime{} | %Date{} | nil
+  @spec find(html_tree) :: DateTime.t() | Date.t() | nil
   @selectors [
     {"meta[property='article:published_time'], meta[property='article:published']", "content"},
     {"time", "datetime"},

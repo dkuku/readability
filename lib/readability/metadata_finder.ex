@@ -143,9 +143,6 @@ defmodule Readability.MetadataFinder do
     end
   end
 
-  defp trim_if_binary(str) when is_binary(str), do: String.trim(str)
-  defp trim_if_binary(_), do: nil
-
   @doc """
   Extract all metadata values from meta tags into a map.
   This follows the Mozilla Readability.js pattern of collecting all values first.
@@ -210,6 +207,7 @@ defmodule Readability.MetadataFinder do
       nil -> lazy |> collect_meta_values() |> first_matching_value(@title_keys)
       title -> title
     end
+    |> normalize_whitespace()
     |> unescape_html_entities()
   end
 
@@ -304,12 +302,19 @@ defmodule Readability.MetadataFinder do
   defp clean_byline(""), do: nil
 
   defp clean_byline(byline) do
-    byline
-    |> String.trim()
-    |> String.replace(~r/^By\s+/i, "")
-    |> case do
+    trimmed = String.trim(byline)
+
+    # Only strip "By " if it's a simple byline (no newlines, not too long)
+    cleaned =
+      if String.contains?(trimmed, "\n") or String.length(trimmed) > 100 do
+        trimmed
+      else
+        String.replace(trimmed, ~r/^By\s+/i, "")
+      end
+
+    case cleaned do
       "" -> nil
-      cleaned -> cleaned
+      result -> result
     end
   end
 
@@ -318,15 +323,24 @@ defmodule Readability.MetadataFinder do
   # We use a conservative subset of selectors to avoid false positives.
   @byline_selectors [
     "[itemprop='author'] [itemprop='name']",
+    "[itemprop='author']",
     "[rel='author']",
     ".byline [itemprop='name']",
-    ".byline-name"
+    ".byline-name",
+    ".byline",
+    ".author",
+    ".author-name",
+    "[class*='author']",
+    "[class*='byline']",
+    "[class*='writer']"
   ]
 
   defp extract_byline_from_dom(lazy) do
     Enum.find_value(@byline_selectors, fn selector ->
       lazy
-      |> LazyHTML.query(selector <> ":first-of-type")
+      |> LazyHTML.query(selector)
+      |> LazyHTML.to_tree()
+      |> List.first()
       |> extract_valid_text(1, 100)
       |> clean_byline_text()
     end)
@@ -396,6 +410,7 @@ defmodule Readability.MetadataFinder do
       excerpt ->
         excerpt
     end
+    |> normalize_whitespace()
     |> unescape_html_entities()
   end
 
@@ -405,19 +420,31 @@ defmodule Readability.MetadataFinder do
     ".content p",
     ".post-content p",
     ".entry-content p",
+    ".article-content p",
+    ".post p",
+    "[role='main'] p",
     "p",
     "article div",
     "main div",
+    ".content div",
     "div"
   ]
 
   defp extract_excerpt_from_content(lazy) do
+    # Try to find a good excerpt - prefer longer paragraphs (50-500 chars)
+    # Fall back to shorter text if nothing found (10-500 chars)
     Enum.find_value(@excerpt_selectors, fn selector ->
       lazy
       |> LazyHTML.query(selector)
       |> LazyHTML.to_tree()
-      |> Enum.find_value(&extract_valid_text(&1, 1, 500))
-    end)
+      |> Enum.find_value(&extract_valid_text(&1, 50, 500))
+    end) ||
+      Enum.find_value(@excerpt_selectors, fn selector ->
+        lazy
+        |> LazyHTML.query(selector)
+        |> LazyHTML.to_tree()
+        |> Enum.find_value(&extract_valid_text(&1, 10, 500))
+      end)
   end
 
   @doc """
@@ -493,8 +520,6 @@ defmodule Readability.MetadataFinder do
     end
   end
 
-  defp is_url?(_), do: false
-
   # Unescape common HTML entities
   defp unescape_html_entities(nil), do: nil
 
@@ -550,5 +575,15 @@ defmodule Readability.MetadataFinder do
           full_match
       end
     end)
+  end
+
+  # Normalize whitespace - collapse 3+ spaces into single space, preserve newlines and double spaces
+  defp normalize_whitespace(nil), do: nil
+
+  defp normalize_whitespace(str) when is_binary(str) do
+    str
+    # Replace 3+ non-newline whitespace with single space
+    |> String.replace(~r/[^\S\n]{3,}/, " ")
+    |> String.trim()
   end
 end

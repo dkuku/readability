@@ -26,6 +26,10 @@ defmodule Readability.ArticleBuilder do
     build(lazy, opts, 0)
   end
 
+  def build(html_tree, opts) do
+    build(html_tree, opts, 0)
+  end
+
   def build(%LazyHTML{} = lazy, opts, depth) when depth < 5 do
     lazy
     |> LazyHTML.to_tree()
@@ -35,10 +39,6 @@ defmodule Readability.ArticleBuilder do
   def build(%LazyHTML{} = lazy, _opts, _depth) do
     # Fallback to prevent infinite recursion
     LazyHTML.to_tree(lazy)
-  end
-
-  def build(html_tree, opts) do
-    build(html_tree, opts, 0)
   end
 
   def build(html_tree, opts, depth) when is_list(html_tree) do

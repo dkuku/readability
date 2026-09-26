@@ -60,7 +60,7 @@ defmodule Readability do
   @type lazy :: LazyHTML.t()
   @type url :: binary
   @type options :: list
-  @type headers :: list[tuple]
+  @type headers :: list(tuple()) | map()
 
   @doc """
   Summarize the primary readable content of a webpage.
@@ -68,10 +68,19 @@ defmodule Readability do
   @spec summarize(url, options) :: Summary.t()
   def summarize(url, opts \\ []) do
     opts = Keyword.put(opts, :page_url, url)
-    httpoison_options = Application.get_env(:readability, :httpoison_options, [])
-    %{status_code: _, body: raw, headers: headers} = HTTPoison.get!(url, [], httpoison_options)
 
-    if is_response_markup(headers) do
+    default_req_options =
+      Application.get_env(:readability, :req_options) ||
+        Application.get_env(:readability, :httpoison_options, [])
+
+    {req_options, opts} = Keyword.pop(opts, :req_options, [])
+    req_options = Keyword.merge(default_req_options, req_options)
+
+    response = Req.get!(url, req_options)
+    raw = response.body
+    headers = response.headers
+
+    if response_markup?(headers) do
       html_tree = Helper.normalize(raw, url: url)
       article_tree = ArticleBuilder.build(html_tree, opts)
 
@@ -92,35 +101,55 @@ defmodule Readability do
 
   ## Example
 
-      iex> mime = Readability.mime(headers_list)
+      iex> mime = Readability.mime([{"Content-Type", "text/html"}])
       "text/html"
 
   """
-  @spec mime(headers) :: String.t()
-  def mime(headers \\ []) do
+  @spec mime(headers | Req.Response.t()) :: String.t()
+  def mime(headers \\ [])
+
+  def mime(%Req.Response{headers: headers}), do: mime(headers)
+
+  def mime(headers) when is_map(headers) do
+    case Enum.find(headers, fn {key, _} -> String.downcase(to_string(key)) == "content-type" end) do
+      {_, [first | _]} -> first
+      {_, value} when is_binary(value) -> value
+      _ -> "text/plain"
+    end
+  end
+
+  def mime(headers) when is_list(headers) do
     headers
     |> Enum.find(
       # default
       {"Content-Type", "text/plain"},
-      fn {key, _} -> String.downcase(key) == "content-type" end
+      fn {key, _} -> String.downcase(to_string(key)) == "content-type" end
     )
     |> elem(1)
   end
 
+  def mime(_), do: "text/plain"
+
   @doc """
-  Returns true if Content-Type in provided headers list is a markup type,
+  Returns true if Content-Type in provided headers is a markup type,
   else false.
 
   ## Example
 
-      iex> Readability.is_response_markup?([{"Content-Type", "text/html"}])
+      iex> Readability.response_markup?([{"Content-Type", "text/html"}])
       true
 
   """
-  @spec is_response_markup(headers) :: boolean
-  def is_response_markup(headers) do
+  @spec response_markup?(headers | Req.Response.t()) :: boolean
+  def response_markup?(headers) do
     mime(headers) =~ @markup_mimes
   end
+
+  @doc false
+  @deprecated "Use response_markup?/1 instead"
+  @spec is_response_markup(headers | Req.Response.t()) :: boolean
+  # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
+  def is_response_markup(headers), do: response_markup?(headers)
 
   @doc """
   Extract title
@@ -159,7 +188,7 @@ defmodule Readability do
 
   defp get_tag_text(lazy, selector) do
     lazy
-    |> LazyHTML.query(selector <> ":first-child")
+    |> LazyHTML.query(selector)
     |> LazyHTML.text()
     |> String.trim()
     |> non_empty_or_nil()
@@ -209,7 +238,7 @@ defmodule Readability do
       %DateTime{}
 
   """
-  @spec published_at(binary | html_tree) :: %DateTime{} | %Date{} | nil
+  @spec published_at(binary | html_tree) :: DateTime.t() | Date.t() | nil
   def published_at(raw_html) when is_binary(raw_html) do
     raw_html
     |> LazyHTML.from_document()

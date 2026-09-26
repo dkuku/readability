@@ -100,7 +100,7 @@ defmodule Readability.Helper do
 
   defp filter_out_comments(nodes) when is_list(nodes) do
     nodes
-    |> Enum.reject(&is_comment?/1)
+    |> Enum.reject(&comment?/1)
     |> Enum.map(&filter_out_comments/1)
   end
 
@@ -110,8 +110,8 @@ defmodule Readability.Helper do
 
   defp filter_out_comments(other), do: other
 
-  defp is_comment?({:comment, _}), do: true
-  defp is_comment?(_), do: false
+  defp comment?({:comment, _}), do: true
+  defp comment?(_), do: false
 
   # Turn relative `img` tag paths into absolute if possible
   defp transform_img_paths(html_str, nil), do: html_str

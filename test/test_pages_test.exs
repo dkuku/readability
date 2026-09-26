@@ -111,6 +111,8 @@ defmodule TestPagesTest do
   end
 
   # Extract and normalize text content from HTML
+  defp extract_text(nil), do: ""
+
   defp extract_text(html) do
     html
     |> LazyHTML.from_document()

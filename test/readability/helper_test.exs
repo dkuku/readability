@@ -59,7 +59,7 @@ defmodule Readability.HelperTest do
     </div>
     """
 
-    expected_html = """
+    _expected_html = """
     <div>
       <span>Hello</span>
       <span>World</span>

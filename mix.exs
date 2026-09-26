@@ -8,7 +8,7 @@ defmodule LazyReadability.Mixfile do
     [
       app: :lazy_readability,
       version: @version,
-      elixir: "~> 1.10",
+      elixir: "~> 1.15",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
@@ -40,14 +40,14 @@ defmodule LazyReadability.Mixfile do
 
     [
       {:lazy_html, "~> 0.1"},
-      {:httpoison, "~> 2.0"},
-      {:ex_doc, "~> 0.39", only: :dev},
-      {:styler, "~> 1.10", only: :dev},
+      {:req, "~> 0.5 or ~> 0.6 or ~> 0.7"},
+      {:plug, "~> 1.0", only: :test},
+      {:ex_doc, "~> 0.40", only: :dev},
+      {:styler, "~> 1.12", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test]},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:mock, "~> 0.3", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
-      {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: test_watch_runtime}
+      {:mix_test_watch, "~> 1.4", only: [:dev, :test], runtime: test_watch_runtime}
     ]
   end
 

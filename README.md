@@ -12,6 +12,7 @@ This fork includes the following optimizations:
 
 - **Reduced HTML parsing overhead**: Eliminated redundant `to_tree()`/`from_tree()` conversions by using LazyHTML's query API directly
 - **Streamlined attribute extraction**: Uses `LazyHTML.attribute()` directly on query results instead of converting to tree first
+- **Modern HTTP client**: Uses `Req` for HTTP fetching and test stubs instead of legacy `HTTPoison` and `mock`
 - **Bug fixes**: Fixed `min_text_length` regex lookup that was returning `nil`
 - **Code cleanup**: Resolved compiler warnings
 
@@ -31,7 +32,7 @@ end
 
 After that, run mix deps.get.
 
-Note: LazyReadability requires Elixir 1.10 or higher.
+Note: LazyReadability requires Elixir 1.15 or higher.
 
 ## Usage
 
